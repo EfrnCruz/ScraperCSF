@@ -1,8 +1,8 @@
-# 📋 Scraper CSF - Aplicación Web
+# 📋 Scraper CSF SAT - Aplicación Web
 
 **Extrae datos de PDFs del SAT (CSF) de forma automática y sencilla**
 
-## 🌐 [Abrir Aplicación](https://scrapercsf.streamlit.app/) *(Link activo después del deploy)*
+## 🌐 [Abrir Aplicación](https://scraper-csf-sat.streamlit.app) *(Link activo después del deploy)*
 
 ## 🎯 ¿Qué hace esta aplicación?
 
@@ -56,6 +56,4 @@ La aplicación es muy intuitiva. Si tienes algún problema:
 
 ---
 
-
 **Desarrollado con ❤️ para facilitar el análisis de datos del SAT**
-
