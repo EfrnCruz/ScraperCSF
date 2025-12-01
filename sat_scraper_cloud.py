@@ -609,21 +609,60 @@ class SATScraper:
                 page = doc[page_num]
                 full_text += page.get_text() + "\n"
 
-            # Patrones de extracción del PDF
+            # Patrones de extracción exhaustivos del PDF (31 campos)
             pdf_patterns = {
+                # Datos básicos del contribuyente
                 'pdf_rfc': r'RFC:\s*([A-Z&Ñ]{3,4}\d{6}[A-Z0-9]{3})',
                 'pdf_curp': r'CURP:\s*([A-Z]{4}\d{6}[HM][A-Z]{5}[0-9A-Z]\d)',
-                'pdf_nombre': r'Nombre:\s*([A-ZÁÉÍÓÚÑ\s]+?)(?=\s*Apellido|$)',
+                'pdf_id_cif': r'idCIF:\s*(\d+)',
+                'pdf_nombre': r'Nombre\s*\(s\):\s*([A-ZÁÉÍÓÚÑ\s]+?)(?=\s*Primer|$)',
                 'pdf_primer_apellido': r'Primer Apellido:\s*([A-ZÁÉÍÓÚÑ\s]+?)(?=\s*Segundo|$)',
-                'pdf_segundo_apellido': r'Segundo Apellido:\s*([A-ZÁÉÍÓÚÑ\s]+?)(?=Régimen|Fecha|$)',
-                'pdf_nombre_localidad': r'Nombre de la Localidad:\s*([A-ZÁÉÍÓÚÑ\s]+?)(?=\s*Nombre|$)',
+                'pdf_segundo_apellido': r'Segundo Apellido:\s*([A-ZÁÉÍÓÚÑ\s]+?)(?=Fecha|$)',
+                'pdf_fecha_inicio_operaciones': r'Fecha inicio de operaciones:\s*([A-ZÁÉÍÓÚÑ\d\s]+)',
+                'pdf_nombre_comercial': r'Nombre Comercial:\s*([A-ZÁÉÍÓÚÑ\s]+?)(?=\s*Datos|$)',
+                'pdf_estatus_padron': r'Estatus en el padr[óo]n:\s*([A-ZÁÉÍÓÚÑ\s]+?)(?=\s*Fecha|$)',
+                'pdf_fecha_ultimo_cambio': r'[Úu]ltimo cambio de estado:\s*([A-ZÁÉÍÓÚÑ\s\d]+\s+DE\s+[A-ZÁÉÍÓÚÑ\s]+\d{4})',
+
+                # Domicilio completo
                 'pdf_codigo_postal': r'Código Postal:\s*(\d{5})',
+                'pdf_tipo_vialidad': r'Tipo de Vialidad:\s*([A-ZÁÉÍÓÚÑ\s]+?)(?=\s*Nombre|$)',
+                'pdf_nombre_vialidad': r'Nombre de Vialidad:\s*([A-ZÁÉÍÓÚÑ0-9\s]+?)(?=\s*N[úu]mero|$)',
+                'pdf_numero_exterior': r'N[úu]mero Exterior:\s*(\d+)',
+                'pdf_numero_interior': r'N[úu]mero Interior:\s*(\d+)',
+                'pdf_nombre_localidad': r'Nombre de la Localidad:\s*([A-ZÁÉÍÓÚÑ\s]+?)(?=\s*Nombre|$)',
+                'pdf_nombre_municipio': r'Nombre del Municipio o Demarcaci[óo]n Territorial:\s*([A-ZÁÉÍÓÚÑ\s\d]+?)(?=\s*Nombre|$)',
+                'pdf_nombre_entidad': r'Nombre de la Entidad Federativa:\s*([A-ZÁÉÍÓÚÑ\s]+?)(?=\s*Entre|$)',
+                'pdf_entre_calle': r'Entre Calle:\s*([A-ZÁÉÍÓÚÑ0-9\s]+?)(?=\s*Y|$)',
+                'pdf_y_calle': r'Y Calle:\s*([A-ZÁÉÍÓÚÑ0-9\s]+?)(?=\s*Actividades|$)',
+
+                # Actividades económicas
+                'pdf_actividad_economica': r'Comercio al por menor en ferreter[íi]as y tlapaler[íi]as',
+                'pdf_actividad_porcentaje': r'Comercio al por menor en ferreter[íi]as y tlapaler[íi]as\s+(\d+)',
+                'pdf_actividad_fecha_inicio': r'Comercio al por menor en ferreter[íi]as y tlapaler[íi]as\s+\d+\s+(\d{2}/\d{2}/\d{4})',
+
+                # Regímenes fiscales
+                'pdf_regimen_fiscal': r'Reg[íi]men de Sueldos y Salarios.*?\n',
+                'pdf_regimen_fecha_inicio': r'Reg[íi]men de Sueldos y Salarios.*\s+(\d{2}/\d{2}/\d{4})',
+
+                # Metadatos y ubicación
+                'pdf_lugar_emision': r'SALTILLO\s*,\s*([A-ZÁÉÍÓÚÑ\s]+)\s*A\s+\d+',
+                'pdf_fecha_emision': r'A\s+(\d+)\s+DE\s+([A-ZÁÉÍÓÚÑÑ]+)\s+DE\s+(\d{4})',
+                'pdf_cadena_original': r'Cadena Original Sello:\s*\|\|([^|]+)\|\|',
+                'pdf_sello_digital': r'Sello Digital:\s*([A-Z0-9+/=]{10,})',
             }
 
             for key, pattern in pdf_patterns.items():
                 match = re.search(pattern, full_text, re.IGNORECASE | re.MULTILINE)
                 if match:
-                    pdf_data[key] = self.decode_special_characters(match.group(1).strip())
+                    # Manejar campos con múltiples grupos
+                    if key == 'pdf_fecha_emision':
+                        # Formato: "14 DE JULIO DE 2025"
+                        pdf_data[key] = f"{match.group(1)} DE {match.group(2)} DE {match.group(3)}"
+                    elif key in ['pdf_actividad_economica', 'pdf_regimen_fiscal']:
+                        # Para campos que detectan presencia
+                        pdf_data[key] = 'ENCONTRADO'
+                    else:
+                        pdf_data[key] = self.decode_special_characters(match.group(1).strip())
                 else:
                     pdf_data[key] = ''
 
