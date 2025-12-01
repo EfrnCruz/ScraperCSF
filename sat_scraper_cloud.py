@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 """
-Clase del scraper del SAT optimizada para Streamlit Cloud (sin OpenCV)
+Clase del scraper del SAT optimizada para Streamlit Cloud
 """
 
 import fitz  # PyMuPDF
+import cv2
+import numpy as np
+from PIL import Image
 import io
 import requests
 from bs4 import BeautifulSoup
@@ -23,6 +26,7 @@ import hashlib
 class SATScraper:
     def __init__(self):
         self.results = []
+        self.qr_detector = cv2.QRCodeDetector()
         self.setup_ssl_bypass()
 
         # Cache para sesiones HTTP y resultados
@@ -48,142 +52,34 @@ class SATScraper:
 
     def extract_qr_from_pdf(self, pdf_bytes: bytes, filename: str) -> Optional[str]:
         """
-        Extrae el código QR de la primera página de un PDF usando múltiples métodos
+        Extrae el código QR de la primera página de un PDF desde bytes
         """
         try:
             doc = fitz.open(stream=pdf_bytes, filetype="pdf")
             page = doc[0]  # type: ignore
 
-            # Método 1: Buscar anotaciones de tipo link que parezcan QR
-            for annot in page.annots():
-                if "uri" in annot:
-                    uri = annot["uri"]
-                    if "sat.gob.mx" in uri or "qr" in uri.lower():
-                        doc.close()
-                        return uri
-
-            # Método 2: Intentar con OpenCV headless (si está disponible)
-            qr_result = self._try_opencv_qr(page)
-            if qr_result:
-                doc.close()
-                return qr_result
-
-            # Método 3: Intentar con pyzbar (si está disponible)
-            qr_result = self._try_pyzbar_qr(page)
-            if qr_result:
-                doc.close()
-                return qr_result
-
-            # Método 4: Buscar en el texto URLs del SAT (fallback)
-            text = page.get_text()
-            sat_urls = re.findall(r'https?://[^\\s\\n]*sat\\.gob\\.mx[^\\s\\n]*', text)
-            if sat_urls:
-                doc.close()
-                return sat_urls[0]
-
-            doc.close()
-            return None
-
-        except Exception:
-            return None
-
-    def _try_opencv_qr(self, page) -> Optional[str]:
-        """
-        Intenta extraer QR usando OpenCV headless
-        """
-        try:
-            import cv2
-            import numpy as np
-
-            # Convertir página a imagen
             mat = fitz.Matrix(3, 3)
             pix = page.get_pixmap(matrix=mat)  # type: ignore
             img_data = pix.tobytes("png")
 
-            # Convertir a array de numpy
             img = Image.open(io.BytesIO(img_data))
             img_array = np.array(img)
 
-            # Convertir a escala de grises
             if len(img_array.shape) == 3:
                 gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
             else:
                 gray = img_array
 
-            # Detectar QR
-            detector = cv2.QRCodeDetector()
-            data, bbox, _ = detector.detectAndDecode(gray)
+            data, bbox, _ = self.qr_detector.detectAndDecode(gray)
+            doc.close()
 
             if data:
-                # Verificar patrones específicos del SAT
-                if self._is_sat_url(data):
-                    return data
+                return data
+            else:
+                return None
 
-        except ImportError:
-            pass
-        except Exception:
-            pass
-
-        return None
-
-    def _try_pyzbar_qr(self, page) -> Optional[str]:
-        """
-        Intenta extraer QR usando pyzbar
-        """
-        try:
-            from pyzbar import pyzbar
-
-            # Convertir página a imagen
-            mat = fitz.Matrix(3, 3)
-            pix = page.get_pixmap(matrix=mat)  # type: ignore
-            img_data = pix.tobytes("png")
-
-            # Convertir a imagen PIL
-            img = Image.open(io.BytesIO(img_data))
-
-            # Decodificar QR
-            qr_codes = pyzbar.decode(img)
-
-            for qr_code in qr_codes:
-                qr_data = qr_code.data.decode('utf-8')
-                if self._is_sat_url(qr_data):
-                    return qr_data
-
-        except ImportError:
-            pass
-        except Exception:
-            pass
-
-        return None
-
-    def _is_sat_url(self, data: str) -> bool:
-        """
-        Verifica si los datos decodificados son una URL válida del SAT
-        """
-        if not data:
-            return False
-
-        # Patrones específicos de URLs del SAT
-        sat_patterns = [
-            r'sat\.gob\.mx',
-            r'siat\.sat\.gob\.mx',
-            r'qr\.sat\.gob\.mx',
-            r'://.*csf.*sat',
-            r'D3=\d+_[A-Z0-9]+',  # Patron específico de URLs del SAT
-            r'D1=\d+&D2=\d+&D3=',
-            r'app/qr/faces/mobile'
-        ]
-
-        # Verificar cualquier patrón
-        for pattern in sat_patterns:
-            if re.search(pattern, data, re.IGNORECASE):
-                return True
-
-        # Verificar si parece una URL (http/https)
-        if data.startswith(('http://', 'https://')):
-            return True
-
-        return False
+        except Exception as e:
+            return None
 
     def _fallback_text_search(self, pdf_bytes: bytes) -> Optional[str]:
         """
