@@ -11,7 +11,7 @@ import io
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 
-from sat_scraper import SATScraper
+from sat_scraper_cloud import SATScraper
 import utils
 
 # Configuración de la página con estilo corporativo
