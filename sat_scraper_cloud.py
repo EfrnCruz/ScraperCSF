@@ -48,9 +48,16 @@ class SATScraper:
 
     def extract_qr_from_pdf(self, pdf_bytes: bytes, filename: str) -> Optional[str]:
         """
-        Extrae el código QR de la primera página de un PDF usando PyMuPDF nativo
+        Extrae el código QR de la primera página de un PDF usando pyzbar (alternativa a OpenCV)
         """
         try:
+            # Intentar importar pyzbar
+            try:
+                from pyzbar import pyzbar
+            except ImportError:
+                # Si no hay pyzbar, hacer fallback a búsqueda de texto
+                return self._fallback_text_search(pdf_bytes)
+
             doc = fitz.open(stream=pdf_bytes, filetype="pdf")
             page = doc[0]  # type: ignore
 
@@ -62,30 +69,65 @@ class SATScraper:
                         doc.close()
                         return uri
 
-            # Método 2: Buscar en el texto URLs del SAT
+            # Método 2: Convertir página a imagen y decodificar QR con pyzbar
+            # Aumentar resolución para mejor detección
+            mat = fitz.Matrix(3, 3)
+            pix = page.get_pixmap(matrix=mat)  # type: ignore
+            img_data = pix.tobytes("png")
+
+            # Convertir a imagen PIL
+            img = Image.open(io.BytesIO(img_data))
+
+            # Decodificar QR usando pyzbar
+            qr_codes = pyzbar.decode(img)
+
+            for qr_code in qr_codes:
+                qr_data = qr_code.data.decode('utf-8')
+                # Verificar que sea una URL del SAT
+                if 'sat.gob.mx' in qr_data.lower() or 'qr' in qr_data.lower():
+                    doc.close()
+                    return qr_data
+
+            # Método 3: Buscar en el texto URLs del SAT (fallback)
             text = page.get_text()
             sat_urls = re.findall(r'https?://[^\\s\\n]*sat\\.gob\\.mx[^\\s\\n]*', text)
             if sat_urls:
                 doc.close()
                 return sat_urls[0]
 
-            # Método 3: Buscar patrones específicos de URLs del SAT
-            url_patterns = [
-                r'https://siat\\.sat\\.gob\\.mx/[^\\s\\n]*',
-                r'[^\\s]*sat\\.gob\\.mx/app/qr/[^\\s\\n]*',
-                r'https://[^\\s]*csf[^\\s]*sat[^\\s]*mx[^\\s]*'
-            ]
+            doc.close()
+            return None
 
-            for pattern in url_patterns:
-                matches = re.findall(pattern, text)
-                if matches:
-                    doc.close()
-                    return matches[0]
+        except Exception:
+            return None
+
+    def _fallback_text_search(self, pdf_bytes: bytes) -> Optional[str]:
+        """
+        Método de fallback cuando no hay pyzbar disponible
+        """
+        try:
+            doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+            page = doc[0]  # type: ignore
+
+            # Buscar anotaciones de tipo link
+            for annot in page.annots():
+                if "uri" in annot:
+                    uri = annot["uri"]
+                    if "sat.gob.mx" in uri or "qr" in uri.lower():
+                        doc.close()
+                        return uri
+
+            # Buscar en el texto URLs del SAT
+            text = page.get_text()
+            sat_urls = re.findall(r'https?://[^\\s\\n]*sat\\.gob\\.mx[^\\s\\n]*', text)
+            if sat_urls:
+                doc.close()
+                return sat_urls[0]
 
             doc.close()
             return None
 
-        except Exception as e:
+        except Exception:
             return None
 
     def extract_qr_from_pdf_images(self, pdf_bytes: bytes, filename: str) -> Optional[str]:
@@ -166,10 +208,59 @@ class SATScraper:
         except Exception as e:
             return None
 
+    def debug_pdf_reading(self, pdf_bytes: bytes, filename: str) -> Dict:
+        """
+        Función de debug para verificar si el PDF se lee correctamente
+        """
+        debug_info = {
+            'filename': filename,
+            'pdf_size_bytes': len(pdf_bytes),
+            'can_open_pdf': False,
+            'num_pages': 0,
+            'first_page_text': '',
+            'annotations_found': 0,
+            'sat_urls_in_text': []
+        }
+
+        try:
+            doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+            debug_info['can_open_pdf'] = True
+            debug_info['num_pages'] = len(doc)
+
+            # Extraer texto de la primera página
+            if len(doc) > 0:
+                page = doc[0]
+                debug_info['first_page_text'] = page.get_text()[:500] + "..." if len(page.get_text()) > 500 else page.get_text()
+
+                # Buscar anotaciones
+                try:
+                    annotations = page.annots()
+                    debug_info['annotations_found'] = len(annotations)
+                except:
+                    debug_info['annotations_found'] = 0
+
+                # Buscar URLs del SAT en el texto
+                text = page.get_text()
+                sat_urls = re.findall(r'https?://[^\\s\\n]*sat\\.gob\\.mx[^\\s\\n]*', text)
+                debug_info['sat_urls_in_text'] = sat_urls
+
+            doc.close()
+
+        except Exception as e:
+            debug_info['error'] = str(e)
+
+        return debug_info
+
     def extract_qr_comprehensive(self, pdf_bytes: bytes, filename: str) -> Optional[str]:
         """
         Método completo de extracción de QR con múltiples técnicas
         """
+        # Verificar si el PDF se puede leer
+        debug_info = self.debug_pdf_reading(pdf_bytes, filename)
+
+        if not debug_info['can_open_pdf'] or debug_info['num_pages'] == 0:
+            return None
+
         methods = [
             self.extract_qr_from_pdf,
             self.extract_qr_from_pdf_images,
@@ -552,7 +643,14 @@ class SATScraper:
             'fecha_extraccion': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         }
 
-        # Extraer QR (usando método optimizado para cloud)
+        # Verificar que se esté recibiendo el PDF
+        if not pdf_bytes or len(pdf_bytes) < 100:
+            result['scraping_exitoso'] = 'False'
+            result['extraccion_pdf_exitosa'] = 'False'
+            result['error'] = 'PDF vacío o inválido'
+            return result
+
+        # Extraer QR
         url = self.extract_qr_comprehensive(pdf_bytes, filename)
         result['url_encontrada'] = 'True' if url is not None else 'False'
         result['url'] = url if url else 'No encontrada'
@@ -677,7 +775,7 @@ class SATScraper:
         detailed_data = []
 
         for result in results:
-            if result.get('scraping_exitoso') == 'True':
+            if result.get('scraping_exitoso') in [True, 'True']:  # Acepta tanto booleano como string
                 detailed_row = {
                     'Archivo PDF': result.get('archivo_pdf', ''),
                     'RFC': result.get('rfc', ''),
