@@ -154,11 +154,11 @@ def create_stats_dataframe(results: List[Dict]) -> pd.DataFrame:
     
     # Crear DataFrame con datos y columnas por separado para evitar conflictos de tipos
     df = pd.DataFrame([
-        ['📊 Total PDFs procesados', total_files],
-        ['✅ Scraping web exitoso', successful_scraping],
-        ['📄 Extracción PDF exitosa', successful_pdf_extraction],
-        ['❌ Scraping web fallido', total_files - successful_scraping],
-        ['❌ Extracción PDF fallida', total_files - successful_pdf_extraction],
+        ['📊 Total PDFs procesados', str(total_files)],
+        ['✅ Scraping web exitoso', str(successful_scraping)],
+        ['📄 Extracción PDF exitosa', str(successful_pdf_extraction)],
+        ['❌ Scraping web fallido', str(total_files - successful_scraping)],
+        ['❌ Extracción PDF fallida', str(total_files - successful_pdf_extraction)],
         ['📈 Tasa éxito scraping web', f"{(successful_scraping/total_files*100):.1f}%" if total_files > 0 else "0%"],
         ['📈 Tasa éxito extracción PDF', f"{(successful_pdf_extraction/total_files*100):.1f}%" if total_files > 0 else "0%"],
         ['🕒 Fecha procesamiento', datetime.now().strftime('%Y-%m-%d %H:%M:%S')]

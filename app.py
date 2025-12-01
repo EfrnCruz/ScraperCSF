@@ -424,7 +424,7 @@ def main():
                     utils.display_file_info(file)
             
             # Botón de procesamiento
-            if st.button("🚀 Iniciar Procesamiento", type="primary", use_container_width=True):
+            if st.button("🚀 Iniciar Procesamiento", type="primary", width='stretch'):
                 process_files(uploaded_files, enable_web_scraping, enable_pdf_extraction, max_workers, timeout)
     
     with tab2:
@@ -437,13 +437,13 @@ def main():
             with result_tab1:
                 st.subheader("📋 Resumen General")
                 summary_df = utils.create_summary_dataframe(st.session_state.results)
-                st.dataframe(summary_df, use_container_width=True)
+                st.dataframe(summary_df, width='stretch')
             
             with result_tab2:
                 st.subheader("🌐 Datos Extraídos del Web")
                 detailed_df = utils.create_detailed_dataframe(st.session_state.results)
                 if not detailed_df.empty:
-                    st.dataframe(detailed_df, use_container_width=True)
+                    st.dataframe(detailed_df, width='stretch')
                 else:
                     st.info("No hay datos del web para mostrar")
             
@@ -451,7 +451,7 @@ def main():
                 st.subheader("📄 Datos Extraídos del PDF")
                 pdf_df = utils.create_pdf_dataframe(st.session_state.results)
                 if not pdf_df.empty:
-                    st.dataframe(pdf_df, use_container_width=True)
+                    st.dataframe(pdf_df, width='stretch')
                 else:
                     st.info("No hay datos del PDF para mostrar")
         else:
@@ -484,7 +484,7 @@ def main():
             # Tabla de estadísticas detalladas
             st.subheader("📊 Estadísticas Detalladas")
             stats_df = utils.create_stats_dataframe(st.session_state.results)
-            st.dataframe(stats_df, use_container_width=True)
+            st.dataframe(stats_df, width='stretch')
             
             # Gráficos (si hay datos)
             if total_files > 0:
@@ -513,7 +513,7 @@ def main():
             st.info(f"📄 Archivo a generar: {filename}")
             
             # Botón de descarga
-            if st.button("📥 Descargar Excel", type="primary", use_container_width=True):
+            if st.button("📥 Descargar Excel", type="primary", width='stretch'):
                 try:
                     with st.spinner("🔄 Generando archivo Excel..."):
                         # Crear instancia del scraper
@@ -528,7 +528,7 @@ def main():
                             data=excel_bytes,
                             file_name=filename,
                             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                            use_container_width=True
+                            width='stretch'
                         )
                         
                         st.success("✅ Archivo Excel generado correctamente")
